@@ -1,5 +1,5 @@
-var Quiz = artifacts.require("Quiz");
+var Quiz = artifacts.require("./Quiz.sol");
 
 module.exports = function(deployer) {
-	deployer.deploy(Quiz);
+	deployer.deploy(Quiz, 3, 400);
 };
