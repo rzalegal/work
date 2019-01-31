@@ -111,7 +111,7 @@ contract Quiz_Time_Bounded {
 	}
 	
 	//	Fallback-функция, отвечающая за прием средств контракта
-	function() public payable {
+	function() public payable isCreator {
         require(msg.value > 0, "Deposit must be greater than zero");
         TX_FUNDS = REWARD_FUNDS = msg.value / 2;
 	}
