@@ -1,4 +1,4 @@
-pragma experimental ABIEncoderV2;
+pragma solidity ^0.4.24;
 
 contract Quiz_Time_Bounded {
 
@@ -12,15 +12,15 @@ contract Quiz_Time_Bounded {
     uint256 public endTIme;		//	Quiz finish time ("beginTime" + "duration" user input in the constructor)
 
     uint256 REWARD_FUNDS;		//	All the funds to be splitted between participants as a reward
-    uint256 REWARD;				//	Dynamically calculated reward based on PARTICIPANTS.length
+    uint256 public REWARD;				//	Dynamically calculated reward based on PARTICIPANTS.length
 
     uint256 TX_FUNDS; 			//	Transaction fee payments funds (50% of this.balance at most)
     							//	(If not empty by the quiz finish moment, the funds return to the creator)
 
-    uint256 TX_SPENT;
+    uint256 TX_SPENT;			//	Overall amount spent on transactions
 
     uint256 MAX_REWARD;			// 	Максимальное вознаграждение за участие в опросе (устанавливается создателем опроса)
-    string WINNING_OPTION;      //  Текст варианта, набравшего наибольшее количество голосов
+    string public WINNING_OPTION;      //  Текст варианта, набравшего наибольшее количество голосов
 
     address[] PARTICIPANTS;
 
@@ -39,7 +39,7 @@ contract Quiz_Time_Bounded {
 
 	//	Адрес создателя опроса в сети Ethereum 
 	//	(определяется непосредственно при создании контракта опроса)
-	address creator;
+	address public creator;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
 	mapping (address => User) users;
@@ -86,7 +86,7 @@ contract Quiz_Time_Bounded {
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor(
 		string _title, 
-		string[] _options,
+		uint256 _options,
 		uint256 duration, 
 		uint256 _maxReward
 		) 
@@ -100,18 +100,18 @@ contract Quiz_Time_Bounded {
 	    TITLE = _title;
 	    MAX_REWARD = _maxReward;
 
-	    for (uint256 i = 0; i < _options.length; i++) {
+	    for (uint256 i = 0; i < _options; i++) {
 	        options.push(Option({
-	            text: _options[i],
+	            text: '',
 	            totalVotes: 0
 	        }));
 	    }
 
-	    emit Quiz_Created(TITLE, msg.sender, beginTime, duration);	
+	    emit Quiz_Created(TITLE, creator, beginTime, duration);	
 	}
 	
 	//	Fallback-функция, отвечающая за прием средств контракта
-	function() public payable {
+	function() public payable isCreator {
         require(msg.value > 0, "Deposit must be greater than zero");
         TX_FUNDS = REWARD_FUNDS = msg.value / 2;
 	}
@@ -124,7 +124,7 @@ contract Quiz_Time_Bounded {
 	still_on
 	no_double_vote
 	{
-		require(creator != msg.sender);
+		require(creator != msg.sender, "Creator can`t throw votes!");
 		User storage u = users[msg.sender];
 		PARTICIPANTS.push(msg.sender);
 		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
@@ -149,6 +149,7 @@ contract Quiz_Time_Bounded {
 
 	function finish() isCreator public {
 		FINISHED = true;
+		emit Quiz_Finished(TITLE, WINNING_OPTION, endTIme);
 		uint256 max;
 	    uint256 winner;
 	    for (uint256 i = 0; i < options.length; i++) {
@@ -158,13 +159,11 @@ contract Quiz_Time_Bounded {
 	        }
 	    }
 	    WINNING_OPTION = options[winner].text;
-		payout();
-		emit Quiz_Finished(TITLE, WINNING_OPTION, endTIme);
-		emit Payout(TITLE, REWARD, PARTICIPANTS);
+	    payout();
 	}
 
 	//	Проведение выплат участникам
-	function payout() internal isCreator returns (bool success) {
+	function payout() public returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
 		if (REWARD > MAX_REWARD)
@@ -175,7 +174,7 @@ contract Quiz_Time_Bounded {
 		}
 		// Остатки средств по контракту отправляются создателю контракта
 		creator.transfer(address(this).balance);
-		
+		emit Payout(TITLE, REWARD, PARTICIPANTS);	
 		return true;
 	}
 	
