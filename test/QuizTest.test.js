@@ -8,7 +8,7 @@ contract('Quiz', ([creator, voter, voter_2, voter_3]) => {
 			"Who will be the president", 
 			3, 
 			400,
-			web3.utils.toWei('1','ether'),
+			web3.utils.toWei('0.01','ether'),
 			{ from: creator }
 		));
 	});
@@ -59,10 +59,9 @@ contract('Quiz', ([creator, voter, voter_2, voter_3]) => {
 					value: 1e+18
 			});
 
-		console.log(await web3.eth.getBalance(await quiz.address))
 
 		const initialBalance = 
-			web3.utils.fromWei(await web3.eth.getBalance(voter_3),'ether');
+			await web3.eth.getBalance(voter_3);
 		await quiz.throwVote(0, { from: voter });
 		await quiz.throwVote(1, { from: voter_2 });
 		await quiz.throwVote(0, { from: voter_3 });
@@ -72,12 +71,19 @@ contract('Quiz', ([creator, voter, voter_2, voter_3]) => {
 		let op = await quiz.options(0);
 
 		const overallBalance = 
-			web3.utils.fromWei(await web3.eth.getBalance(voter_3), 'ether');
+			await web3.eth.getBalance(voter_3);
 		assert(await quiz.WINNING_OPTION() == op.text);
-		console.log(initialBalance);
-		console.log(overallBalance)
-		const rew = await quiz.REWARD()
-		console.log(rew.toString())
+		console.log("Initial Balance:", web3.utils.fromWei(initialBalance.toString(), 'ether'));
+		console.log("Overall balance:", web3.utils.fromWei(overallBalance.toString(), 'ether'));
+		assert(overallBalance > initialBalance);
+
+		const deviation = web3.utils.toWei('0.00004', 'ether');
+
+		console.log(web3.utils.fromWei((overallBalance - initialBalance).toString(), 'ether'))
+		
+		const rew = web3.utils.fromWei(await quiz.REWARD(), 'ether')
+		console.log("Reward:", rew)
+		console.log("Creator balance:", await web3.eth.getBalance(creator))
 	});
 
 })
