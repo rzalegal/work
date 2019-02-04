@@ -35,6 +35,7 @@ contract Quiz_Time_Bounded {
 	struct Option {
 		string text;
 		uint256 totalVotes;
+		bool descripted;
 	}
 
 	//	Адрес создателя опроса в сети Ethereum 
@@ -69,9 +70,10 @@ contract Quiz_Time_Bounded {
 	    require(!u.already, "Can`t vote twice");
 	    _;
 	}
-
+	
+	//	Функция не будет вызвана, если на контракте отсутствуют средства
 	modifier contract_has_funds() {
-		require(address(this).balance);
+		require(address(this).balance > 0);
 		_;
 	}
 
@@ -103,7 +105,8 @@ contract Quiz_Time_Bounded {
 	    for (uint256 i = 0; i < _options; i++) {
 	        options.push(Option({
 	            text: '',
-	            totalVotes: 0
+	            totalVotes: 0,
+	            descripted: false
 	        }));
 	    }
 
@@ -126,7 +129,7 @@ contract Quiz_Time_Bounded {
 	contract_has_funds
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
-		require(options[_choice].text, "Option must be descripted firstly!");
+		require(options[_choice].descripted, "Option must be descripted firstly!");
 		User storage u = users[msg.sender];
 		PARTICIPANTS.push(msg.sender);
 		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
@@ -170,9 +173,11 @@ contract Quiz_Time_Bounded {
 	//	(Нужна ввиду отсутствия поддержки многомерных динамических массивов в Solidity,
 	//	коим и является массив строк)
 	function assignDescription(uint256 _no, string memory _text) 
-	public isCreator 
+	public 
+	isCreator 
 	{
 	    options[_no].text = _text;
+	    options[_no].descripted = true;
 	    emit Option_Assigned(TITLE, _no, _text);
 	}
 

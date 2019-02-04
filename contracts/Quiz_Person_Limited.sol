@@ -25,6 +25,7 @@ contract Quiz_Person_Limited {
 	struct Option {
 		string text;
 		uint256 totalVotes;
+		bool descripted;
 	}
 
 	//	Адрес создателя опроса в сети Ethereum 
@@ -60,8 +61,9 @@ contract Quiz_Person_Limited {
 	    _;
 	}
 
+	//	Функция не будет вызвана, если на контракте отсутствуют средства
 	modifier contract_has_funds() {
-		require(address(this).balance);
+		require(address(this).balance > 0);
 		_;
 	}
 
@@ -93,7 +95,8 @@ contract Quiz_Person_Limited {
 	    for (uint256 i = 0; i < _options; i++) {
 	        options.push(Option({
 	            text: '',
-	            totalVotes: 0
+	            totalVotes: 0,
+	            descripted: false
 	        }));
 	    }
 
@@ -116,7 +119,7 @@ contract Quiz_Person_Limited {
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
 		require(PARTICIPANTS.length < MAX_USERS, "Maximum users cap reached");
-		require(options[_choice].text, "Option must be descripted firsty!");
+		require(options[_choice].descripted, "Option must be descripted firsty!");
 		User storage u = users[msg.sender];
 		PARTICIPANTS.push(msg.sender);
 	    u.already = true;
@@ -147,6 +150,7 @@ contract Quiz_Person_Limited {
 	isCreator 
 	{
 	    options[_no].text = _text;
+	    options[_no].descripted = true;
 	    emit Option_Assigned(TITLE, _no, _text);
 	}
 
