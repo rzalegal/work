@@ -1,14 +1,17 @@
 pragma solidity ^0.4.24;
-
+import "./Forecast.sol";
 contract Court {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 
 	bool public FINISHED;		// Shows whether the quiz is opened/closed;
+	bool public ACTIVE;
 	string public TITLE; 
     uint256 public beginTime;	//	Quiz start time (block timestamp at the start)
     uint256 public REWARD;		//	Dynamically calculated reward based on PARTICIPANTS.length
     uint256 public MAX_USERS;	//  Maximal quiantity of judges specified by creator	
+
+    Forecast forecast;
 
     string public WINNING_OPTION;      //  Текст варианта, набравшего наибольшее количество голосов
 
@@ -51,7 +54,7 @@ contract Court {
 
 	//	Модификатор функции, проверяющий, проходит ли опрос до сих пор
 	modifier still_on() {
-	    require(address(this).balance > REWARD && !FINISHED, "Quiz is over");
+	    require(!FINISHED && ACTIVE, "Quiz is over");
 	    _;
 	}
 	
@@ -61,12 +64,6 @@ contract Court {
 	    Judge storage u = judges[msg.sender];
 	    require(!u.already, "Can`t vote twice");
 	    _;
-	}
-
-	//	Функция не будет вызвана, если на контракте отсутствуют средства
-	modifier contract_has_funds() {
-		require(address(this).balance > 0);
-		_;
 	}
 
 	//	Модификатор проверки адреса на наличие исполняемого кода:
@@ -80,6 +77,7 @@ contract Court {
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor
 	(
+	    address _creator,
 		string _title, 
 		uint256 _maxJudges, 
 		uint256 _reward
@@ -87,10 +85,9 @@ contract Court {
 	public
 	payable 
 	{
-	    require(!isContract(msg.sender));
 	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
-	    creator = msg.sender;
+	    creator = _creator;
 	    TITLE = _title;
 	    REWARD = _reward;
 	    MAX_USERS = _maxJudges;
@@ -159,6 +156,12 @@ contract Court {
   			size := extcodesize(addr)
   		}
   		return size > 0;
+	}
+
+	function activate(address _addr) public isCreator {
+		forecast = Forecast(_addr);
+		require(forecast.FINISHED());
+		ACTIVE = true;
 	}
 
 	event Court_Created(string _title, address _creator, uint256 _timestamp, uint256 _duration);
