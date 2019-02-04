@@ -127,7 +127,6 @@ contract Quiz_Person_Limited {
 
 	function finish() isCreator public {
 		FINISHED = true;
-		emit Quiz_Finished(TITLE, WINNING_OPTION, now);
 		uint256 max;
 	    uint256 winner;
 	    for (uint256 i = 0; i < options.length; i++) {
@@ -137,6 +136,7 @@ contract Quiz_Person_Limited {
 	        }
 	    }
 	    WINNING_OPTION = options[winner].text;
+	    emit Quiz_Finished(TITLE, WINNING_OPTION, now);
 	}
 	
 	//	Вспомогательная функция описания вариантов ответов (номер -> описание)

@@ -13,8 +13,9 @@ contract Forecast {
 
     uint256 public REWARD_FUNDS;		//	All the funds to be splitted between participants as a reward
     uint256 public REWARD;				//	Dynamically calculated reward based on PARTICIPANTS.length
-
+    uint256 public MAX_REWARD;
     string public WINNING_OPTION;      	//  Текст варианта, набравшего наибольшее количество голосов
+
 
     address[] public PARTICIPANTS;
 
@@ -40,7 +41,7 @@ contract Forecast {
 	mapping (address => User) users;
 
 	//	Массив вариантов ответа
-	Option[] public options;
+	mapping (uint256 => Option) public options;
 
 //ФУНКЦИОНАЛЬНАЯ ЧАСТЬ
 
@@ -83,7 +84,6 @@ contract Forecast {
 	constructor
 	(
 		string _title, 
-		uint256 _options,
 		uint256 duration, 
 		uint256 _reward
 	) 
@@ -96,23 +96,10 @@ contract Forecast {
 	    endTime = beginTime + duration;
 	    creator = msg.sender;
 	    TITLE = _title;
-	    REWARD = _reward;
-
-	    for (uint256 i = 0; i < _options; i++) {
-	        options.push(Option({
-	            text: '',
-	            voters: [],
-	            descripted: false
-	        }));
-	    }
+	    MAX_REWARD = _reward;
+	    REWARD_FUNDS = msg.value / 2;
 
 	    emit Quiz_Created(TITLE, creator, beginTime, duration);	
-	}
-	
-	//	Fallback-функция, отвечающая за прием средств контракта
-	function() public payable isCreator {
-        require(msg.value > 0, "Deposit must be greater than zero");
-        TX_FUNDS = REWARD_FUNDS = msg.value / 2;
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
@@ -130,27 +117,19 @@ contract Forecast {
 		PARTICIPANTS.push(msg.sender);
 		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
 	    u.already = true;
-	    options[_choice].totalVotes += 1;
+	    options[_choice].voters.push(msg.sender);
 	    u.choice = _choice;
 	}
 
 	function finish() isCreator public {
 		FINISHED = true;
-		emit Quiz_Finished(TITLE, WINNING_OPTION, endTime);
-		uint256 max;
-	    uint256 winner;
-	    for (uint256 i = 0; i < options.length; i++) {
-	        if (options[i].totalVotes > max) {
-	            max = options[i].totalVotes;
-	            winner = i;
-	        }
-	    }
-	    WINNING_OPTION = options[winner].text;
+	    WINNING_OPTION = "";
+	    emit Quiz_Finished(TITLE, WINNING_OPTION, endTime);
 	    payout();
 	}
 
 	//	Проведение выплат участникам
-	function payout() public returns (bool success) {
+	function payout() internal returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
 		if (REWARD > MAX_REWARD)
