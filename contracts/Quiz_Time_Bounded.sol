@@ -86,16 +86,18 @@ contract Quiz_Time_Bounded {
 	}
 	
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
-	constructor(
+	constructor
+	(
 		string _title, 
 		uint256 _options,
 		uint256 duration, 
 		uint256 _maxReward
-		) 
+	) 
 	public
 	payable 
 	{
 	    require(!isContract(msg.sender));
+	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
 	    endTime = beginTime + duration;
 	    creator = msg.sender;
@@ -111,12 +113,6 @@ contract Quiz_Time_Bounded {
 	    }
 
 	    emit Quiz_Created(TITLE, creator, beginTime, duration);	
-	}
-	
-	//	Fallback-функция, отвечающая за прием средств контракта
-	function() public payable isCreator {
-        require(msg.value > 0, "Deposit must be greater than zero");
-        TX_FUNDS = REWARD_FUNDS = msg.value / 2;
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
@@ -154,7 +150,7 @@ contract Quiz_Time_Bounded {
 	}
 
 	//	Проведение выплат участникам
-	function payout() public returns (bool success) {
+	function payout() internal isCreator returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
 		if (REWARD > MAX_REWARD)

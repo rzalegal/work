@@ -1,16 +1,20 @@
 pragma solidity ^0.4.24;
 
-contract Quiz_Person_Limited {
+contract Forecast {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 
-	bool public FINISHED;		// Shows whether the quiz is opened/closed;
+	bool public FINISHED;				// Shows whether the quiz is opened/closed;
+	
 	string public TITLE; 
-    uint256 public beginTime;	//	Quiz start time (block timestamp at the start)
-    uint256 public REWARD;		//	Dynamically calculated reward based on PARTICIPANTS.length
-    uint256 public MAX_USERS;	//  Maximal quiantity of users specified by creator	
 
-    string public WINNING_OPTION;      //  Текст варианта, набравшего наибольшее количество голосов
+    uint256 public beginTime;			//	Quiz start time (block timestamp at the start)
+    uint256 public endTime;				//	Quiz finish time ("beginTime" + "duration" user input in the constructor)
+
+    uint256 public REWARD_FUNDS;		//	All the funds to be splitted between participants as a reward
+    uint256 public REWARD;				//	Dynamically calculated reward based on PARTICIPANTS.length
+
+    string public WINNING_OPTION;      	//  Текст варианта, набравшего наибольшее количество голосов
 
     address[] public PARTICIPANTS;
 
@@ -24,7 +28,7 @@ contract Quiz_Person_Limited {
 	//	Структура варианта ответа (опции): текстовое описание, число проголосовавших "За"
 	struct Option {
 		string text;
-		uint256 totalVotes;
+		address[] voters;
 		bool descripted;
 	}
 
@@ -49,7 +53,7 @@ contract Quiz_Person_Limited {
 
 	//	Модификатор функции, проверяющий, проходит ли опрос до сих пор
 	modifier still_on() {
-	    require(address(this).balance > REWARD && !FINISHED, "Quiz is over");
+	    require(now < endTime && !FINISHED, "Quiz is over");
 	    _;
 	}
 	
@@ -60,7 +64,7 @@ contract Quiz_Person_Limited {
 	    require(!u.already, "Can`t vote twice");
 	    _;
 	}
-
+	
 	//	Функция не будет вызвана, если на контракте отсутствуют средства
 	modifier contract_has_funds() {
 		require(address(this).balance > 0);
@@ -80,7 +84,7 @@ contract Quiz_Person_Limited {
 	(
 		string _title, 
 		uint256 _options,
-		uint256 _maxUsers, 
+		uint256 duration, 
 		uint256 _reward
 	) 
 	public
@@ -89,20 +93,26 @@ contract Quiz_Person_Limited {
 	    require(!isContract(msg.sender));
 	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
+	    endTime = beginTime + duration;
 	    creator = msg.sender;
 	    TITLE = _title;
 	    REWARD = _reward;
-	    MAX_USERS = _maxUsers;
 
 	    for (uint256 i = 0; i < _options; i++) {
 	        options.push(Option({
 	            text: '',
-	            totalVotes: 0,
+	            voters: [],
 	            descripted: false
 	        }));
 	    }
 
-	    emit Quiz_Created(TITLE, creator, beginTime, MAX_USERS);	
+	    emit Quiz_Created(TITLE, creator, beginTime, duration);	
+	}
+	
+	//	Fallback-функция, отвечающая за прием средств контракта
+	function() public payable isCreator {
+        require(msg.value > 0, "Deposit must be greater than zero");
+        TX_FUNDS = REWARD_FUNDS = msg.value / 2;
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
@@ -115,19 +125,18 @@ contract Quiz_Person_Limited {
 	contract_has_funds
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
-		require(PARTICIPANTS.length < MAX_USERS, "Maximum users cap reached");
-		require(options[_choice].descripted, "Option must be descripted firsty!");
+		require(options[_choice].descripted, "Option must be descripted firstly!");
 		User storage u = users[msg.sender];
 		PARTICIPANTS.push(msg.sender);
+		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
 	    u.already = true;
 	    options[_choice].totalVotes += 1;
 	    u.choice = _choice;
-	    msg.sender.transfer(REWARD);
 	}
 
 	function finish() isCreator public {
 		FINISHED = true;
-		emit Quiz_Finished(TITLE, WINNING_OPTION, now);
+		emit Quiz_Finished(TITLE, WINNING_OPTION, endTime);
 		uint256 max;
 	    uint256 winner;
 	    for (uint256 i = 0; i < options.length; i++) {
@@ -137,6 +146,23 @@ contract Quiz_Person_Limited {
 	        }
 	    }
 	    WINNING_OPTION = options[winner].text;
+	    payout();
+	}
+
+	//	Проведение выплат участникам
+	function payout() public returns (bool success) {
+		//	Если размер награды превышает максимальный, выплачивается 
+		//	установленная создателем максимальная награда
+		if (REWARD > MAX_REWARD)
+			REWARD = MAX_REWARD;
+
+		for (uint256 i = 0; i < PARTICIPANTS.length; i++) {
+			PARTICIPANTS[i].transfer(REWARD);
+		}
+		// Остатки средств по контракту отправляются создателю контракта
+		creator.transfer(address(this).balance);
+		emit Payout(TITLE, REWARD, PARTICIPANTS);	
+		return true;
 	}
 	
 	//	Вспомогательная функция описания вариантов ответов (номер -> описание)
