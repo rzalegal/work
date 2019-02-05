@@ -5,7 +5,9 @@ contract Quiz_Person_Limited {
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 
 	bool public FINISHED;		// Shows whether the quiz is opened/closed;
+
 	string public TITLE; 
+
     uint256 public beginTime;	//	Quiz start time (block timestamp at the start)
     uint256 public REWARD;		//	Dynamically calculated reward based on PARTICIPANTS.length
     uint256 public MAX_USERS;	//  Maximal quiantity of users specified by creator	
@@ -21,7 +23,8 @@ contract Quiz_Person_Limited {
 		uint256 choice;
 	}
 
-	//	Структура варианта ответа (опции): текстовое описание, число проголосовавших "За"
+	//	Структура варианта ответа (опции): текстовое описание, число проголосовавших "За",
+	//	состояние опции "Описана": Да/Нет
 	struct Option {
 		string text;
 		uint256 totalVotes;
@@ -33,10 +36,10 @@ contract Quiz_Person_Limited {
 	address public creator;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
-	mapping (address => User) users;
+	mapping (address => User) public users;
 
 	//	Массив вариантов ответа
-	Option[] public options;
+	mapping (uint256 => Option) public options;
 
 //ФУНКЦИОНАЛЬНАЯ ЧАСТЬ
 
@@ -59,12 +62,6 @@ contract Quiz_Person_Limited {
 	    User storage u = users[msg.sender];
 	    require(!u.already, "Can`t vote twice");
 	    _;
-	}
-
-	//	Функция не будет вызвана, если на контракте отсутствуют средства
-	modifier contract_has_funds() {
-		require(address(this).balance > 0);
-		_;
 	}
 
 	//	Модификатор проверки адреса на наличие исполняемого кода:
@@ -94,15 +91,7 @@ contract Quiz_Person_Limited {
 	    REWARD = _reward;
 	    MAX_USERS = _maxUsers;
 
-	    for (uint256 i = 0; i < _options; i++) {
-	        options.push(Option({
-	            text: '',
-	            totalVotes: 0,
-	            descripted: false
-	        }));
-	    }
-
-	    emit Quiz_Created(TITLE, creator, beginTime, MAX_USERS);	
+	    emit Quiz_Created(TITLE, "Person Limited", creator, beginTime, MAX_USERS);	
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
@@ -112,16 +101,18 @@ contract Quiz_Person_Limited {
 	not_contract
 	still_on
 	no_double_vote
-	contract_has_funds
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
 		require(PARTICIPANTS.length < MAX_USERS, "Maximum users cap reached");
 		require(options[_choice].descripted, "Option must be descripted firsty!");
-		User storage u = users[msg.sender];
+
 		PARTICIPANTS.push(msg.sender);
+
+		User storage u = users[msg.sender];
 	    u.already = true;
-	    options[_choice].totalVotes += 1;
 	    u.choice = _choice;
+
+	    options[_choice].totalVotes += 1;
 	    msg.sender.transfer(REWARD);
 	}
 
@@ -129,14 +120,14 @@ contract Quiz_Person_Limited {
 		FINISHED = true;
 		uint256 max;
 	    uint256 winner;
-	    for (uint256 i = 0; i < options.length; i++) {
+	    for (uint256 i = 0; i < NUM_OPTIONS; i++) {
 	        if (options[i].totalVotes > max) {
 	            max = options[i].totalVotes;
 	            winner = i;
 	        }
 	    }
 	    WINNING_OPTION = options[winner].text;
-	    emit Quiz_Finished(TITLE, WINNING_OPTION, now);
+	    emit Quiz_Finished("Creator finished the quiz", TITLE, WINNING_OPTION, now);
 	}
 	
 	//	Вспомогательная функция описания вариантов ответов (номер -> описание)
@@ -146,8 +137,10 @@ contract Quiz_Person_Limited {
 	public 
 	isCreator 
 	{
+		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
 	    options[_no].descripted = true;
+	    NUM_OPTIONS += 1;
 	    emit Option_Assigned(TITLE, _no, _text);
 	}
 
@@ -162,8 +155,8 @@ contract Quiz_Person_Limited {
   		return size > 0;
 	}
 
-	event Quiz_Created(string _title, address _creator, uint256 _timestamp, uint256 _duration);
-	event Option_Assigned(string _quizTitle, uint256 _no, string _text);
-	event Payout(string _quizTitle, uint256 _amount, address[] _participants);
-	event Quiz_Finished(string _title, string _winningOption, uint256 timestamp);
+	event Quiz_Created(string title, string type, address creator, uint256 timestamp, uint256 duration);
+	event Option_Assigned(string title, uint256 no, string text);
+	event Payout(uint256 amount, address[] participants, uint256 timestamp);
+	event Quiz_Finished(string reason, string title, string winningOption, uint256 timestamp);
 }

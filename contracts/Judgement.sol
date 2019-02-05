@@ -1,21 +1,22 @@
 pragma solidity ^0.4.24;
 import "./Forecast.sol";
-contract Court {
+contract Judgement {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 
 	bool public FINISHED;		// Shows whether the quiz is opened/closed;
-	bool public ACTIVE;
+
 	string public TITLE; 
+
     uint256 public beginTime;	//	Quiz start time (block timestamp at the start)
-    uint256 public REWARD;		//	Dynamically calculated reward based on PARTICIPANTS.length
+    uint256 public REWARD;		//	Dynamically calculated reward based on JUDGES.length
     uint256 public MAX_USERS;	//  Maximal quiantity of judges specified by creator	
 
     Forecast forecast;
 
     string public WINNING_OPTION;      //  Текст варианта, набравшего наибольшее количество голосов
 
-    address[] public PARTICIPANTS;
+    address[] public JUDGES;
 
     //	Структура пользователя: голосовал ли ранее (да/нет), эл.почта, выбранный вариант ответа (номер)
 	struct Judge {	
@@ -27,7 +28,6 @@ contract Court {
 	//	Структура варианта ответа (опции): текстовое описание, число проголосовавших "За"
 	struct Option {
 		string text;
-		uint256 totalVotes;
 		uint256 percent;
 		address[] voters;
 		bool descripted;
@@ -54,7 +54,7 @@ contract Court {
 
 	//	Модификатор функции, проверяющий, проходит ли опрос до сих пор
 	modifier still_on() {
-	    require(!FINISHED && ACTIVE, "Quiz is over");
+	    require(true);
 	    _;
 	}
 	
@@ -92,47 +92,52 @@ contract Court {
 	    REWARD = _reward;
 	    MAX_USERS = _maxJudges;
 
-	    emit Court_Created(TITLE, creator, beginTime, MAX_USERS);	
+	    emit Judgement_Created(TITLE, creator, beginTime, MAX_USERS);	
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
 	function throwVote(uint256 _choice) 
 	public
-	payable
 	not_contract
 	still_on
 	no_double_vote
-	contract_has_funds
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
-		require(PARTICIPANTS.length < MAX_USERS, "Maximum judges cap reached");
+		require(JUDGES.length < MAX_USERS, "Maximum judges cap reached");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
 
 		Judge storage u = judges[msg.sender];
 		Option storage op = options[_choice];
 
-		PARTICIPANTS.push(msg.sender);
+		JUDGES.push(msg.sender);
 
 	    u.already = true;
 	    u.choice = _choice;
 
-	    op.totalVotes += 1;
-	    op.percent = op.totalVotes / PARTICIPANTS.length * 100;
+	    op.voters.push(msg.sender);
+	    op.percent = op.voters.length / JUDGES.length * 100;
 	}
 
 	function finish() isCreator public {
 		FINISHED = true;
 		uint256 max;
 	    uint256 winner;
-	    for (uint256 i = 0; i < PARTICIPANTS.length; i++) {
+	    for (uint256 i = 0; i < JUDGES.length; i++) {
 	        if (options[i].totalVotes > max) {
 	            max = options[i].totalVotes;
 	            winner = i;
 	        }
 	    }
-	    require(options[winner].percent >= 95, "Consensus not reached. Delegating on admin");
+	    if (options[winner].percent >= 95) {
+	    	emit Judgement_Finished("No Consensus between the judges reached");
+	    	revert("Consensus not reached. Delegating on admin");
+	    }
 	    WINNING_OPTION = options[winner].text;
-	    emit Court_Finished(TITLE, WINNING_OPTION, now);
+	    emit Judgement_Finished("Consensus reached.", TITLE, WINNING_OPTION, now);
+
+	    for (uint256 i = 0; i < options[_rightChoice].voters.length; i++) {
+			options[_rightChoice].voters[i].transfer(REWARD);
+		}
 	}
 	
 	//	Вспомогательная функция описания вариантов ответов (номер -> описание)
@@ -142,9 +147,9 @@ contract Court {
 	public 
 	isCreator 
 	{
+		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
 	    options[_no].descripted = true;
-	    emit Option_Assigned(TITLE, _no, _text);
 	}
 
 	//	Функция проверки адреса, используемая в модификаторе "not_contract()":
@@ -158,14 +163,7 @@ contract Court {
   		return size > 0;
 	}
 
-	function activate(address _addr) public isCreator {
-		forecast = Forecast(_addr);
-		require(forecast.FINISHED());
-		ACTIVE = true;
-	}
-
-	event Court_Created(string _title, address _creator, uint256 _timestamp, uint256 _duration);
-	event Option_Assigned(string _courtTitle, uint256 _no, string _text);
-	event Payout(string _courtTitle, uint256 _amount, address[] _participants);
-	event Court_Finished(string _title, string _winningOption, uint256 timestamp);
+	event Judgement_Created(address Forecast_judged, string title, uint256 timestamp, uint256 duration, uint256 reward);
+	event Judgement_Finished(string reason, string Forecast_judged, string winningOption, uint256 timestamp);
+	event Payout(string title, uint256 amount, address[] judges, timestamp);
 }

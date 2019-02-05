@@ -1,5 +1,5 @@
 pragma solidity ^0.4.24;
-
+import "./Judgement.sol";
 contract Forecast {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
@@ -16,6 +16,8 @@ contract Forecast {
     uint256 public MAX_REWARD;
     string public WINNING_OPTION;      	//  Текст варианта, набравшего наибольшее количество голосов
 
+    address public judgesAddress;
+
 
     address[] public PARTICIPANTS;
 
@@ -28,9 +30,9 @@ contract Forecast {
 
 	//	Структура варианта ответа (опции): текстовое описание, число проголосовавших "За"
 	struct Option {
+		bool descripted;
 		string text;
 		address[] voters;
-		bool descripted;
 	}
 
 	//	Адрес создателя опроса в сети Ethereum 
@@ -38,7 +40,7 @@ contract Forecast {
 	address public creator;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
-	mapping (address => User) users;
+	mapping (address => User) public users;
 
 	//	Массив вариантов ответа
 	mapping (uint256 => Option) public options;
@@ -66,12 +68,6 @@ contract Forecast {
 	    _;
 	}
 	
-	//	Функция не будет вызвана, если на контракте отсутствуют средства
-	modifier contract_has_funds() {
-		require(address(this).balance > 0);
-		_;
-	}
-
 	//	Модификатор проверки адреса на наличие исполняемого кода:
 	//	Нельзя допустить попадания в список участников АККАУНТОВ-КОНТРАКТОВ,
 	//	поскольку именно при помощи последних могут быть произведены попытки взлома
@@ -97,19 +93,17 @@ contract Forecast {
 	    creator = msg.sender;
 	    TITLE = _title;
 	    MAX_REWARD = _reward;
-	    REWARD_FUNDS = msg.value / 2;
+	    REWARD_FUNDS = msg.value;
 
-	    emit Quiz_Created(TITLE, creator, beginTime, duration);	
+	    emit Forecast_Created(TITLE, creator, beginTime, duration);	
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
 	function throwVote(uint256 _choice) 
 	public
-	payable
 	not_contract
 	still_on
 	no_double_vote
-	contract_has_funds
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
@@ -121,22 +115,33 @@ contract Forecast {
 	    u.choice = _choice;
 	}
 
-	function finish() isCreator public {
+
+	function finish() public isCreator {
 		FINISHED = true;
-	    WINNING_OPTION = "";
-	    emit Quiz_Finished(TITLE, WINNING_OPTION, endTime);
-	    payout();
 	}
 
+	function createJudgement(uint256 _numJudges, uint256 _reward) public isCreator {
+		require(FINISHED, "Judgement cannot be created until the forecast expired");
+		judgesAddress = new Judgement(msg.sender, TITLE, _numJudges, _reward);
+		Judgement judge = Judgement(judgesAddress); 
+	}
+
+	function applyJudgement() public isCreator {
+		Judgement judge = Judgement(judgesAddress);
+		require(judge.WINNING_OPTION() != '', "Judgement cannot be applied until consensus reached");
+	}
+
+
 	//	Проведение выплат участникам
-	function payout() internal returns (bool success) {
+	function payout(uint256 _rightChoice) public returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
+		require(WINNING_OPTION != '', "Payout may be proceeded after Judgement only");
 		if (REWARD > MAX_REWARD)
 			REWARD = MAX_REWARD;
 
-		for (uint256 i = 0; i < PARTICIPANTS.length; i++) {
-			PARTICIPANTS[i].transfer(REWARD);
+		for (uint256 i = 0; i < options[_rightChoice].voters.length; i++) {
+			options[_rightChoice].voters[i].transfer(REWARD);
 		}
 		// Остатки средств по контракту отправляются создателю контракта
 		creator.transfer(address(this).balance);
@@ -151,6 +156,7 @@ contract Forecast {
 	public 
 	isCreator 
 	{
+		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
 	    options[_no].descripted = true;
 	    emit Option_Assigned(TITLE, _no, _text);
@@ -167,8 +173,8 @@ contract Forecast {
   		return size > 0;
 	}
 
-	event Quiz_Created(string _title, address _creator, uint256 _timestamp, uint256 _duration);
-	event Option_Assigned(string _quizTitle, uint256 _no, string _text);
-	event Payout(string _quizTitle, uint256 _amount, address[] _participants);
-	event Quiz_Finished(string _title, string _winningOption, uint256 timestamp);
+	event Forecast_Created(string title, address creator, uint256 timestamp, uint256 duration);
+	event Option_Assigned(string title, uint256 no, string text);
+	event Payout(string title, uint256 amount, address[] participants);
+	event Forecast_Finished(string title, string winningOption, uint256 timestamp);
 }
