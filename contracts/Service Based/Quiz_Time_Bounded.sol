@@ -1,23 +1,22 @@
 pragma solidity ^0.4.24;
-import "./Judgement.sol";
-contract Forecast {
+
+contract Quiz_Time_Bounded {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 
-	bool public FINISHED;				// Shows whether the quiz is opened/closed;
+	bool public FINISHED;		// Shows whether the quiz is opened/closed;
 	
-	string public TITLE; 
+	string public TITLE;
+    string public WINNING_OPTION;      //  Текст варианта, набравшего наибольшее количество голосов 
 
-    uint256 public beginTime;			//	Quiz start time (block timestamp at the start)
-    uint256 public endTime;				//	Quiz finish time ("beginTime" + "duration" user input in the constructor)
+    uint256 public beginTime;	//	Quiz start time (block timestamp at the start)
+    uint256 public endTime;		//	Quiz finish time ("beginTime" + "duration" user input in the constructor)
 
     uint256 public REWARD_FUNDS;		//	All the funds to be splitted between participants as a reward
     uint256 public REWARD;				//	Dynamically calculated reward based on PARTICIPANTS.length
-    uint256 public MAX_REWARD;
-    string public WINNING_OPTION;      	//  Текст варианта, набравшего наибольшее количество голосов
 
-    address public judgesAddress;
-
+    uint256 public MAX_REWARD;			// 	Максимальное вознаграждение за участие в опросе (устанавливается создателем опроса)
+    uint256 public NUM_OPTIONS;
 
     address[] public PARTICIPANTS;
 
@@ -30,9 +29,9 @@ contract Forecast {
 
 	//	Структура варианта ответа (опции): текстовое описание, число проголосовавших "За"
 	struct Option {
-		bool descripted;
 		string text;
-		address[] voters;
+		uint256 totalVotes;
+		bool descripted;
 	}
 
 	//	Адрес создателя опроса в сети Ethereum 
@@ -40,10 +39,10 @@ contract Forecast {
 	address public creator;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
-	mapping (address => User) public users;
+	mapping (address => User) users;
 
 	//	Массив вариантов ответа
-	mapping (uint256 => Option) public options;
+	mapping (uint256 => Option) options;
 
 //ФУНКЦИОНАЛЬНАЯ ЧАСТЬ
 
@@ -67,7 +66,7 @@ contract Forecast {
 	    require(!u.already, "Can`t vote twice");
 	    _;
 	}
-	
+
 	//	Модификатор проверки адреса на наличие исполняемого кода:
 	//	Нельзя допустить попадания в список участников АККАУНТОВ-КОНТРАКТОВ,
 	//	поскольку именно при помощи последних могут быть произведены попытки взлома
@@ -80,8 +79,9 @@ contract Forecast {
 	constructor
 	(
 		string _title, 
+		uint256 _options,
 		uint256 duration, 
-		uint256 _reward
+		uint256 _maxReward
 	) 
 	public
 	payable 
@@ -92,10 +92,10 @@ contract Forecast {
 	    endTime = beginTime + duration;
 	    creator = msg.sender;
 	    TITLE = _title;
-	    MAX_REWARD = _reward;
-	    REWARD_FUNDS = msg.value;
+	    MAX_REWARD = _maxReward;
+	    REWARD_FUNDS = msg.value / 2;
 
-	    emit Forecast_Created(TITLE, creator, beginTime, duration);	
+	    emit Quiz_Created(TITLE, "Person Limited", creator, beginTime, duration);	
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
@@ -107,45 +107,50 @@ contract Forecast {
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
-		User storage u = users[msg.sender];
+
 		PARTICIPANTS.push(msg.sender);
-		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
-	    u.already = true;
-	    options[_choice].voters.push(msg.sender);
-	    u.choice = _choice;
+
+		User storage u = users[msg.sender];
+		u.already = true;
+		u.choice = _choice;
+	    
+	    options[_choice].totalVotes += 1;
+
+	    REWARD = REWARD_FUNDS / PARTICIPANTS.length;
 	}
 
-
-	function finish() public isCreator {
+	function finish() isCreator public {
 		FINISHED = true;
-	}
 
-	function createJudgement(uint256 _numJudges, uint256 _reward) public isCreator {
-		require(FINISHED, "Judgement cannot be created until the forecast expired");
-		judgesAddress = new Judgement(msg.sender, TITLE, _numJudges, _reward);
-		Judgement judge = Judgement(judgesAddress); 
-	}
+		uint256 max;
+	    uint256 winner;
 
-	function applyJudgement() public isCreator {
-		Judgement judge = Judgement(judgesAddress);
-		require(judge.WINNING_OPTION() != '', "Judgement cannot be applied until consensus reached");
-	}
+	    for (uint256 i = 0; i < NUM_OPTIONS; i++) {
+	        if (options[i].totalVotes > max) {
+	            max = options[i].totalVotes;
+	            winner = i;
+	        }
+	    }
 
+	    WINNING_OPTION = options[winner].text;
+
+	    emit Quiz_Finished("Creator finished the quiz", TITLE, WINNING_OPTION, endTime);
+	    payout();
+	}
 
 	//	Проведение выплат участникам
-	function payout(uint256 _rightChoice) public returns (bool success) {
+	function payout() internal isCreator returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
-		require(WINNING_OPTION != '', "Payout may be proceeded after Judgement only");
 		if (REWARD > MAX_REWARD)
 			REWARD = MAX_REWARD;
 
-		for (uint256 i = 0; i < options[_rightChoice].voters.length; i++) {
-			options[_rightChoice].voters[i].transfer(REWARD);
+		for (uint256 i = 0; i < PARTICIPANTS.length; i++) {
+			PARTICIPANTS[i].transfer(REWARD);
 		}
 		// Остатки средств по контракту отправляются создателю контракта
 		creator.transfer(address(this).balance);
-		emit Payout(TITLE, REWARD, PARTICIPANTS);	
+		emit Payout(REWARD, PARTICIPANTS);	
 		return true;
 	}
 	
@@ -159,6 +164,7 @@ contract Forecast {
 		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
 	    options[_no].descripted = true;
+	    NUM_OPTIONS += 1;
 	    emit Option_Assigned(TITLE, _no, _text);
 	}
 
@@ -173,8 +179,8 @@ contract Forecast {
   		return size > 0;
 	}
 
-	event Forecast_Created(string title, address creator, uint256 timestamp, uint256 duration);
+	event Quiz_Created(string title, string type, address creator, uint256 timestamp, uint256 duration);
 	event Option_Assigned(string title, uint256 no, string text);
-	event Payout(string title, uint256 amount, address[] participants);
-	event Forecast_Finished(string title, string winningOption, uint256 timestamp);
+	event Payout(uint256 amount, address[] participants, uint256 timestamp);
+	event Quiz_Finished(string reason, string title, string winningOption, uint256 timestamp);
 }
