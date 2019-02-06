@@ -123,15 +123,36 @@ contract Forecast {
 		FINISHED = true;
 	}
 
-	function createJudgement(uint256 _numJudges, uint256 _reward, uint256 _duration) public isCreator {
+	function createJudgement(
+		uint256 _numJudges,
+		uint256 _reward, 
+		uint256 _duration
+	) 
+	public 
+	isCreator 
+	{
 		require(FINISHED, "Judgement cannot be created until the forecast expired");
+		require(!JudgementApplied, "The forecast is already judged or oraclized");
 		judgesAddress = new Judgement(msg.sender, TITLE, _numJudges, _reward, _duration);
 	}
 
 	function applyJudgement() public isCreator {
 		Judgement judge = Judgement(judgesAddress);
-		require(judge.FINISHED(), "Judgement cannot be applied until consensus reached or court ");
+		
+		require(
+			judge.FINISHED(), 
+			"Judgement cannot be applied until consensus reached or court "
+		);
+
 		WINNING_OPTION_ID = judge.WINNING_OPTION_ID();
+		WINNING_OPTION = options[WINNING_OPTION_ID].text;
+		JudgementApplied = true;
+	}
+
+	function getOracle(uint256 _choice) public isCreator {
+		require(FINISHED, "Oracle cannot be called util the forecast expired");
+		require(!JudgementApplied, "Oracle cannot be called: Judgement applied already");
+		WINNING_OPTION_ID = _choice;
 		JudgementApplied = true;
 	}
 
@@ -140,7 +161,11 @@ contract Forecast {
 	function payout() public not_contract returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
-		require(JudgementApplied, "Payout may be proceeded after Judgement only");
+		require(
+			JudgementApplied, 
+			"Payout can be proceeded after revealing the WINNING_OPTION_ID via Oracle or Judgement"
+		);
+		
 		if (REWARD > MAX_REWARD)
 			REWARD = MAX_REWARD;
 
@@ -177,7 +202,12 @@ contract Forecast {
   		return size > 0;
 	}
 
-	event Forecast_Created(string title, address creator, uint256 timestamp, uint256 duration);
+	event Forecast_Created(
+		string title, 
+		address creator, 
+		uint256 timestamp, 
+		uint256 duration
+	);
 	event Option_Assigned(string title, uint256 no, string text);
 	event Payout(string title, uint256 amount, address[] participants);
 	event Forecast_Finished(string title, string winningOption, uint256 timestamp);

@@ -149,7 +149,7 @@ contract Quiz_Time_Bounded {
 		}
 		// Остатки средств по контракту отправляются создателю контракта
 		creator.transfer(address(this).balance);
-		emit Payout(REWARD, PARTICIPANTS);	
+		emit Payout(REWARD, PARTICIPANTS, now);	
 		return true;
 	}
 	
