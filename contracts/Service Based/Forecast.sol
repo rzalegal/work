@@ -15,8 +15,10 @@ contract Forecast {
     uint256 public REWARD_FUNDS;		//	All the funds to be splitted between participants as a reward
     uint256 public REWARD;				//	Dynamically calculated reward based on PARTICIPANTS.length
     uint256 public MAX_REWARD;
+    
     string public WINNING_OPTION;      	//  Текст варианта, набравшего наибольшее количество голосов
-
+    uint256 public WINNING_OPTION_ID;
+    
     address public judgesAddress;
 
 
@@ -39,6 +41,7 @@ contract Forecast {
 	//	Адрес создателя опроса в сети Ethereum 
 	//	(определяется непосредственно при создании контракта опроса)
 	address public creator;
+	address public master;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
 	mapping (address => User) public users;
@@ -50,8 +53,8 @@ contract Forecast {
 
 	//	Классический модификатор проверки исполнителя функции:
 	//	Серия выплат может быть инициирована только с контракта создателя опроса
-	modifier isCreator() {
-		require(creator == msg.sender, "For creator uses only");
+	modifier isMaster() {
+		require(master == msg.sender, "For master uses only");
 		_;
 	}
 
@@ -63,19 +66,12 @@ contract Forecast {
 	
 	//	Модификатор проверки двойного голосования: 
 	//	пользователь может обратиться к throwVote лишь один раз
-	modifier no_double_vote() {
-	    User storage u = users[msg.sender];
+	modifier no_double_vote(address _from) {
+	    User storage u = users[_from];
 	    require(!u.already, "Can`t vote twice");
 	    _;
 	}
 	
-	//	Модификатор проверки адреса на наличие исполняемого кода:
-	//	Нельзя допустить попадания в список участников АККАУНТОВ-КОНТРАКТОВ,
-	//	поскольку именно при помощи последних могут быть произведены попытки взлома
-	modifier not_contract() {
-		require(!isContract(msg.sender), "Contract injection detected");
-		_;
-	}
 	
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor
@@ -87,7 +83,7 @@ contract Forecast {
 	public
 	payable 
 	{
-	    require(!isContract(msg.sender));
+	    require(isContract(msg.sender));
 	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
 	    endTime = beginTime + duration;
@@ -108,43 +104,69 @@ contract Forecast {
 	{
 		require(creator != msg.sender, "Creator can`t throw votes!");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
-		User storage u = users[msg.sender];
+
 		PARTICIPANTS.push(msg.sender);
 		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
+		
+		User storage u = users[msg.sender];	    
 	    u.already = true;
-	    options[_choice].voters.push(msg.sender);
 	    u.choice = _choice;
+
+	    options[_choice].voters.push(msg.sender);
 	}
 
-
-	function finish() public isCreator {
+	function finish() public isMaster {
 		FINISHED = true;
 	}
 
-	function createJudgement(uint256 _numJudges, uint256 _reward) public isCreator {
+	function createJudgement(
+		uint256 _numJudges,
+		uint256 _reward, 
+		uint256 _duration
+	) 
+	public 
+	isMaster 
+	{
 		require(FINISHED, "Judgement cannot be created until the forecast expired");
-		judgesAddress = new Judgement(msg.sender, TITLE, _numJudges, _reward);
-		Judgement judge = Judgement(judgesAddress); 
+		require(!JudgementApplied, "The forecast is already judged or oraclized");
+		judgesAddress = new Judgement(creator, TITLE, _numJudges, _reward, _duration);
 	}
 
-	function applyJudgement() public isCreator {
+	function applyJudgement() public isMaster {
 		Judgement judge = Judgement(judgesAddress);
-		require(judge.WINNING_OPTION() != '', "Judgement cannot be applied until consensus reached");
-		WINNING_OPTION = judge.WINNING_OPTION();
+		
+		require(
+			judge.FINISHED(), 
+			"Judgement cannot be applied until consensus reached or court "
+		);
+
+		WINNING_OPTION_ID = judge.WINNING_OPTION_ID();
+		WINNING_OPTION = options[WINNING_OPTION_ID].text;
+		JudgementApplied = true;
+	}
+
+	function getOracle(uint256 _choice) public isMaster {
+		require(FINISHED, "Oracle cannot be called util the forecast expired");
+		require(!JudgementApplied, "Oracle cannot be called: Judgement applied already");
+		WINNING_OPTION_ID = _choice;
 		JudgementApplied = true;
 	}
 
 
 	//	Проведение выплат участникам
-	function payout(uint256 _rightChoice) public returns (bool success) {
+	function payout() public isMaster returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
-		require(WINNING_OPTION != '', "Payout may be proceeded after Judgement only");
+		require(
+			JudgementApplied, 
+			"Payout can be proceeded after revealing the WINNING_OPTION_ID via Oracle or Judgement"
+		);
+		
 		if (REWARD > MAX_REWARD)
 			REWARD = MAX_REWARD;
 
-		for (uint256 i = 0; i < options[_rightChoice].voters.length; i++) {
-			options[_rightChoice].voters[i].transfer(REWARD);
+		for (uint256 i = 0; i < options[WINNING_OPTION_ID].voters.length; i++) {
+			options[WINNING_OPTION_ID].voters[i].transfer(REWARD);
 		}
 		// Остатки средств по контракту отправляются создателю контракта
 		creator.transfer(address(this).balance);
@@ -157,7 +179,7 @@ contract Forecast {
 	//	коим и является массив строк)
 	function assignDescription(uint256 _no, string memory _text) 
 	public 
-	isCreator 
+	isMaster 
 	{
 		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
@@ -176,7 +198,12 @@ contract Forecast {
   		return size > 0;
 	}
 
-	event Forecast_Created(string title, address creator, uint256 timestamp, uint256 duration);
+	event Forecast_Created(
+		string title, 
+		address creator, 
+		uint256 timestamp, 
+		uint256 duration
+	);
 	event Option_Assigned(string title, uint256 no, string text);
 	event Payout(string title, uint256 amount, address[] participants);
 	event Forecast_Finished(string title, string winningOption, uint256 timestamp);

@@ -37,6 +37,7 @@ contract Quiz_Time_Bounded {
 	//	Адрес создателя опроса в сети Ethereum 
 	//	(определяется непосредственно при создании контракта опроса)
 	address public creator;
+	address public master;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
 	mapping (address => User) users;
@@ -48,8 +49,8 @@ contract Quiz_Time_Bounded {
 
 	//	Классический модификатор проверки исполнителя функции:
 	//	Серия выплат может быть инициирована только с контракта создателя опроса
-	modifier isCreator() {
-		require(creator == msg.sender, "For creator uses only");
+	modifier isMaster() {
+		require(master == msg.sender, "For master uses only");
 		_;
 	}
 
@@ -61,36 +62,29 @@ contract Quiz_Time_Bounded {
 	
 	//	Модификатор проверки двойного голосования: 
 	//	пользователь может обратиться к throwVote лишь один раз
-	modifier no_double_vote() {
-	    User storage u = users[msg.sender];
+	modifier no_double_vote(address _from) {
+	    User storage u = users[_from];
 	    require(!u.already, "Can`t vote twice");
 	    _;
-	}
-
-	//	Модификатор проверки адреса на наличие исполняемого кода:
-	//	Нельзя допустить попадания в список участников АККАУНТОВ-КОНТРАКТОВ,
-	//	поскольку именно при помощи последних могут быть произведены попытки взлома
-	modifier not_contract() {
-		require(!isContract(msg.sender), "Contract injection detected");
-		_;
 	}
 	
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor
 	(
+		address _creator,
 		string _title, 
-		uint256 _options,
 		uint256 duration, 
 		uint256 _maxReward
 	) 
 	public
 	payable 
 	{
-	    require(!isContract(msg.sender));
+	    require(isContract(msg.sender));	// NEED TO BE REFACTORED TO "msg.sender == '0xfdeb346abef...' "
 	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
 	    endTime = beginTime + duration;
-	    creator = msg.sender;
+	    creator = _creator;
+	    master = msg.sender;
 	    TITLE = _title;
 	    MAX_REWARD = _maxReward;
 	    REWARD_FUNDS = msg.value / 2;
@@ -99,18 +93,18 @@ contract Quiz_Time_Bounded {
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
-	function throwVote(uint256 _choice) 
+	function throwVote(address _voter, uint256 _choice) 
 	public
-	not_contract
+	isMaster
 	still_on
-	no_double_vote
+	no_double_vote(_voter)
 	{
-		require(creator != msg.sender, "Creator can`t throw votes!");
+		require(creator != _voter, "Creator can`t throw votes!");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
 
-		PARTICIPANTS.push(msg.sender);
+		PARTICIPANTS.push(_voter);
 
-		User storage u = users[msg.sender];
+		User storage u = users[_voter];
 		u.already = true;
 		u.choice = _choice;
 	    
@@ -119,7 +113,7 @@ contract Quiz_Time_Bounded {
 	    REWARD = REWARD_FUNDS / PARTICIPANTS.length;
 	}
 
-	function finish() isCreator public {
+	function finish() isMaster public {
 		FINISHED = true;
 
 		uint256 max;
@@ -139,7 +133,7 @@ contract Quiz_Time_Bounded {
 	}
 
 	//	Проведение выплат участникам
-	function payout() internal isCreator returns (bool success) {
+	function payout() internal isMaster returns (bool success) {
 		//	Если размер награды превышает максимальный, выплачивается 
 		//	установленная создателем максимальная награда
 		if (REWARD > MAX_REWARD)
@@ -149,8 +143,8 @@ contract Quiz_Time_Bounded {
 			PARTICIPANTS[i].transfer(REWARD);
 		}
 		// Остатки средств по контракту отправляются создателю контракта
-		creator.transfer(address(this).balance);
-		emit Payout(REWARD, PARTICIPANTS);	
+		creator.transfer(address(this).balance * 97 / 100);
+		emit Payout(REWARD, PARTICIPANTS, now);	
 		return true;
 	}
 	
@@ -159,7 +153,7 @@ contract Quiz_Time_Bounded {
 	//	коим и является массив строк)
 	function assignDescription(uint256 _no, string memory _text) 
 	public 
-	isCreator 
+	isMaster 
 	{
 		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
@@ -179,8 +173,21 @@ contract Quiz_Time_Bounded {
   		return size > 0;
 	}
 
-	event Quiz_Created(string title, string type, address creator, uint256 timestamp, uint256 duration);
+	event Quiz_Created(
+		string title, 
+		string _type, 
+		address creator, 
+		uint256 timestamp, 
+		uint256 duration
+	);
+	
+	event Quiz_Finished(
+		string reason, 
+		string title, 
+		string winningOption, 
+		uint256 timestamp
+	);
+
 	event Option_Assigned(string title, uint256 no, string text);
 	event Payout(uint256 amount, address[] participants, uint256 timestamp);
-	event Quiz_Finished(string reason, string title, string winningOption, uint256 timestamp);
 }
