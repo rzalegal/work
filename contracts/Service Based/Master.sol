@@ -19,15 +19,6 @@ contract Master {
 		_;
 	}
 
-	modifier exists(address _addr) {
-		require(
-			TB_Quiz[_addr].EXISTS() ||
-			PL_Quiz[_addr].EXISTS() ||
-			FCast[_addr].EXISTS(),
-			"Contract doesn`t exist. Use `create` master-methods");
-		_;
-	}
-
 //	Constructor assigns msg.sender to master and checks
 //	if the caller was a contract
 	constructor() public {
@@ -87,47 +78,10 @@ contract Master {
 	{
 		address FC_address = new Forecast(_for, _title, _duration, _reward);
 		FCast[FC_address] = Forecast(FC_address);
+
 		return Forecast(FC_address);
 	}
 
-	function create_Judgement(
-		address _forecastContract,
-		uint256 _numJudges,
-		uint256 _reward,
-		uint256 _duration
-	)
-	public
-	isMaster
-	{
-
-	}
-
-	function fromAddress(address _contractAddress)
-	public
-	isMaster
-	returns(address)
-	{
-		if (TB_Quiz[_contractAddress].TYPE() == "TB")
-			return Quiz_Time_Bounded(_contractAddress);
-		if (PL_Quiz[_contractAddress].TYPE() == "PL")
-			return Quiz_Person_Limited(_contractAddress);
-		if	(FCast[_contractAddress].TYPE() == "FC")
-			return Forecast(_contractAddress);
-		require(false);
-	}
-
-//	Функция голоса от имени пользователя
-	function Vote(
-		address _contractAddress, 
-		address _for,
-		uint256 _choice
-	)
-	public
-	isMaster
-	exists(_contractAddress)
-	{
-	    _contractAddress.call.gas(3000000)("throwVote",_for, _choice);
-	}  
 
 //	Вспомогательная функция проверки вызывающего аккаунта
 	function isContract(address addr) private view returns(bool) {

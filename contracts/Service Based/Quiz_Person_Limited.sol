@@ -3,7 +3,7 @@ pragma solidity ^0.4.24;
 contract Quiz_Person_Limited {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
-bool public EXISTS = true;		//	Variable for extrernal access from Master
+bool public EXISTS = true;
 
 	bool public FINISHED;		// Shows whether the quiz is opened/closed;
 

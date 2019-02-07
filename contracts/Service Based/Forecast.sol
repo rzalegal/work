@@ -3,7 +3,7 @@ import "./Judgement.sol";
 contract Forecast {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
-string public TYPE = "FC";
+bool public EXISTS = true;
 
 	bool public FINISHED;				// Shows whether the quiz is opened/closed;
 	bool public JudgementApplied;		// Shows if there was a court-round on the forecast;
