@@ -4,7 +4,7 @@ contract('Forecast', ([master, creator, voter_1, voter_2]) => {
 	let quiz;
 
 	beforeEach('setup contract', async() => {
-		quiz = await(Quiz.new(
+		quiz = await(FC.new(
 			"Who will be the president", 
 			3, 
 			400,
@@ -17,25 +17,6 @@ contract('Forecast', ([master, creator, voter_1, voter_2]) => {
 		assert.equal(await quiz.creator(), creator)
 	});
 
-/*	it('is avaliable for funds from creator only', async() => {
-		try {
-			await quiz.sendTransaction({
-			from: voter_2,
-			value: 1e+6
-			});
-			assert.fail();
-		} catch (err) {
-				assert(err.toString().includes("creator"), err.toString());
-				await quiz.sendTransaction({
-					from: creator,
-					value: 1e+18
-				});
-			}
-
-		let quizAddress = await quiz.address
-		assert.equal(await web3.eth.getBalance(quizAddress), 1e+18);
-	});
-*/
 	it('assigns description correctly', async() => {
 		await quiz.assignDescription(0, "Putin");
 		const op = await quiz.options(0);
