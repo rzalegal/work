@@ -21,9 +21,9 @@ contract Master {
 
 	modifier exists(address _addr) {
 		require(
-			TB_Quiz[_addr] ||
-			PL_Quiz[_addr] ||
-			FCast[_addr],
+			TB_Quiz[_addr].EXISTS() ||
+			PL_Quiz[_addr].EXISTS() ||
+			FCast[_addr].EXISTS(),
 			"Contract doesn`t exist. Use `create` master-methods");
 		_;
 	}
@@ -49,12 +49,12 @@ contract Master {
 	) 
 	public 
 	isMaster 
-	returns(address)
+	returns(Quiz_Time_Bounded)
 	{
 		address TB_address = new Quiz_Time_Bounded(_for, _title, _duration, _maxReward);
 		TB_Quiz[TB_address] = Quiz_Time_Bounded(TB_address);
 
-		return TB_address;
+		return Quiz_Time_Bounded(TB_address);
 	}
 
 //	Ограниченный по числу участников опрос
@@ -66,12 +66,12 @@ contract Master {
 	)
 	public
 	isMaster
-	returns(address)
+	returns(Quiz_Person_Limited)
 	{
 		address PL_address = new Quiz_Person_Limited(_for, _title, _maxUsers, _reward);
 		PL_Quiz[PL_address] = Quiz_Person_Limited(PL_address);
 
-		return PL_address;
+		return Quiz_Person_Limited(PL_address);
 	}
 
 //	Прогноз
@@ -83,16 +83,41 @@ contract Master {
 	)
 	public
 	isMaster
-	returns(address)
+	returns(Forecast)
 	{
 		address FC_address = new Forecast(_for, _title, _duration, _reward);
-		FCast[FC_address] = FCast(FC_address);
-		return FC_address;
+		FCast[FC_address] = Forecast(FC_address);
+		return Forecast(FC_address);
+	}
+
+	function create_Judgement(
+		address _forecastContract,
+		uint256 _numJudges,
+		uint256 _reward,
+		uint256 _duration
+	)
+	public
+	isMaster
+	{
+
+	}
+
+	function fromAddress(address _contractAddress)
+	public
+	isMaster
+	returns(address)
+	{
+		if (TB_Quiz[_contractAddress].TYPE() == "TB")
+			return Quiz_Time_Bounded(_contractAddress);
+		if (PL_Quiz[_contractAddress].TYPE() == "PL")
+			return Quiz_Person_Limited(_contractAddress);
+		if	(FCast[_contractAddress].TYPE() == "FC")
+			return Forecast(_contractAddress);
+		require(false);
 	}
 
 //	Функция голоса от имени пользователя
 	function Vote(
-		string _contractType, 
 		address _contractAddress, 
 		address _for,
 		uint256 _choice
@@ -101,18 +126,7 @@ contract Master {
 	isMaster
 	exists(_contractAddress)
 	{
-		if (_contractType == "TB") 
-		{
-			TB_Quiz[_contractAddress].throwVote(_for, _choice);
-		} else if (_contractType == "PL") 
-		{
-			PL_Quiz[_contractAddress].throwVote(_for, choice);
-		} else if (_contractType == "FC")
-		{
-			FCast[_contractAddress].throwVote(_for, choice);
-		} else {
-			revert("Incorrect contract type input: `TB`,`PL` or `FC` allowed")
-		}  
+	    _contractAddress.call.gas(3000000)("throwVote",_for, _choice);
 	}  
 
 //	Вспомогательная функция проверки вызывающего аккаунта

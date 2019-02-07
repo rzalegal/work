@@ -3,6 +3,7 @@ pragma solidity ^0.4.24;
 contract Quiz_Time_Bounded {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+string public TYPE = "TB";
 
 	bool public FINISHED;		// Shows whether the quiz is opened/closed;
 	

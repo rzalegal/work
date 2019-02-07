@@ -3,6 +3,7 @@ import "./Judgement.sol";
 contract Forecast {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+string public TYPE = "FC";
 
 	bool public FINISHED;				// Shows whether the quiz is opened/closed;
 	bool public JudgementApplied;		// Shows if there was a court-round on the forecast;
@@ -76,6 +77,7 @@ contract Forecast {
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor
 	(
+	    address _creator,
 		string _title, 
 		uint256 duration, 
 		uint256 _reward
@@ -87,7 +89,8 @@ contract Forecast {
 	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
 	    endTime = beginTime + duration;
-	    creator = msg.sender;
+	    creator = _creator;
+	    master = msg.sender;
 	    TITLE = _title;
 	    MAX_REWARD = _reward;
 	    REWARD_FUNDS = msg.value;
@@ -96,23 +99,22 @@ contract Forecast {
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
-	function throwVote(uint256 _choice) 
+	function throwVote(address _for, uint256 _choice) 
 	public
-	not_contract
 	still_on
-	no_double_vote
+	no_double_vote(_for)
 	{
-		require(creator != msg.sender, "Creator can`t throw votes!");
+		require(creator != _for, "Creator can`t throw votes!");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
 
-		PARTICIPANTS.push(msg.sender);
+		PARTICIPANTS.push(_for);
 		REWARD = REWARD_FUNDS / PARTICIPANTS.length;
 		
-		User storage u = users[msg.sender];	    
+		User storage u = users[_for];	    
 	    u.already = true;
 	    u.choice = _choice;
 
-	    options[_choice].voters.push(msg.sender);
+	    options[_choice].voters.push(_for);
 	}
 
 	function finish() public isMaster {

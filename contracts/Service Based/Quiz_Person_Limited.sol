@@ -3,6 +3,7 @@ pragma solidity ^0.4.24;
 contract Quiz_Person_Limited {
 
 //ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+bool public EXISTS = true;		//	Variable for extrernal access from Master
 
 	bool public FINISHED;		// Shows whether the quiz is opened/closed;
 
@@ -81,6 +82,7 @@ contract Quiz_Person_Limited {
 	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
 	    creator = _creator;
+	    master = msg.sender;
 	    TITLE = _title;
 	    REWARD = _reward;
 	    MAX_USERS = _maxUsers;
@@ -92,9 +94,8 @@ contract Quiz_Person_Limited {
 	function throwVote(address _voter, uint256 _choice) 
 	public
 	payable
-	not_contract
 	still_on
-	no_double_vote
+	no_double_vote(_voter)
 	{
 		require(creator != _voter, "Creator can`t throw votes!");
 		require(PARTICIPANTS.length < MAX_USERS, "Maximum users cap reached");

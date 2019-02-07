@@ -14,7 +14,6 @@ contract Judgement {
     uint256 public REWARD;		//	Dynamically calculated reward based on JUDGES.length
     uint256 public MAX_USERS;	//  Maximal quiantity of judges specified by creator	
 
-    Forecast forecast;
 
     uint256 public WINNING_OPTION_ID;      //  Текст варианта, набравшего наибольшее количество голосов
     string public WINNING_OPTION;
@@ -41,7 +40,6 @@ contract Judgement {
 	//	Адрес создателя опроса в сети Ethereum 
 	//	(определяется непосредственно при создании контракта опроса)
 	address public creator;
-	address public master;
 
 	// Соответствие между адресами в сети Ethereum и Пользователями опроса
 	mapping (address => Judge) judges;
@@ -53,8 +51,8 @@ contract Judgement {
 
 	//	Классический модификатор проверки исполнителя функции:
 	//	Серия выплат может быть инициирована только с контракта создателя опроса
-	modifier isMaster() {
-		require(master == msg.sender, "For master uses only");
+	modifier isCreator() {
+		require(creator == msg.sender, "For creator uses only");
 		_;
 	}
 
@@ -66,8 +64,8 @@ contract Judgement {
 	
 	//	Модификатор проверки двойного голосования: 
 	//	пользователь может обратиться к throwVote лишь один раз
-	modifier no_double_vote(address _from) {
-	    User storage u = users[_from];
+	modifier no_double_vote() {
+	    Judge storage u = judges[msg.sender];
 	    require(!u.already, "Can`t vote twice");
 	    _;
 	}
@@ -75,6 +73,10 @@ contract Judgement {
 	//	Модификатор проверки адреса на наличие исполняемого кода:
 	//	Нельзя допустить попадания в список участников АККАУНТОВ-КОНТРАКТОВ,
 	//	поскольку именно при помощи последних могут быть произведены попытки взлома
+	modifier not_contract() {
+		require(!isContract(msg.sender), "Contract injection detected");
+		_;
+	}
 	
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor
@@ -106,25 +108,24 @@ contract Judgement {
 	}
 	
 	//	Функция отправки голоса за определенный вариант (номер)
-	function throwVote(uint256 _choice) 
+	function throwVote(address _for, uint256 _choice) 
 	public
-	not_contract
 	still_on
 	no_double_vote
 	{
-		require(creator != msg.sender, "Creator can`t throw votes!");
+		require(creator != _for, "Creator can`t throw votes!");
 		require(JUDGES.length < MAX_USERS, "Maximum judges cap reached");
 		require(options[_choice].descripted, "Option must be descripted firstly!");
 
-		Judge storage u = judges[msg.sender];
+		Judge storage u = judges[_for];
 		Option storage op = options[_choice];
 
-		JUDGES.push(msg.sender);
+		JUDGES.push(_for);
 
 	    u.already = true;
 	    u.choice = _choice;
 
-	    op.voters.push(msg.sender);
+	    op.voters.push(_for);
 	    op.percent = op.voters.length / JUDGES.length * 100;
 	}
 
@@ -202,3 +203,4 @@ contract Judgement {
 	
 	event Payout(string title, uint256 amount, address[] judges, uint256 timestamp);
 }
+	
