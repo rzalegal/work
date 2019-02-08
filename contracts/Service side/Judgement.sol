@@ -80,9 +80,7 @@ contract Judgement {
 	
 	//	Конструктор контракта, создающий опрос с определенным количеством варианта
 	constructor
-	(
-	    address _creator,
-		string _title, 
+	( 
 		uint256 _maxJudges, 
 		uint256 _reward,
 		uint256 _duration
@@ -92,9 +90,9 @@ contract Judgement {
 	{
 	    beginTime = now;
 	    endTime = beginTime + _duration;
-	    creator = _creator;
+	    creator = Forecast(msg.sender).creator();
 	    FORECAST_ON_COURT = msg.sender;
-	    TITLE = _title;
+	    TITLE = Forecast(msg.sender).TITLE();
 	    REWARD = _reward;
 	    MAX_USERS = _maxJudges;
 

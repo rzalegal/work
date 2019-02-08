@@ -131,7 +131,7 @@ bool public EXISTS = true;
 	{
 		require(FINISHED, "Judgement cannot be created until the forecast expired");
 		require(!JudgementApplied, "The forecast is already judged or oraclized");
-		judgesAddress = new Judgement(creator, TITLE, _numJudges, _reward, _duration);
+		judgesAddress = new Judgement(_numJudges, _reward, _duration);
 	}
 
 	function applyJudgement() public isMaster {
