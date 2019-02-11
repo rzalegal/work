@@ -139,7 +139,7 @@ bool public EXISTS = true;
 		
 		require(
 			judge.FINISHED(), 
-			"Judgement cannot be applied until consensus reached or court "
+			"Judgement cannot be applied until consensus reached or court"
 		);
 
 		WINNING_OPTION_ID = judge.WINNING_OPTION_ID();

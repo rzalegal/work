@@ -134,7 +134,8 @@ contract Quiz_Person_Limited_cli {
 	//	(Нужна ввиду отсутствия поддержки многомерных динамических массивов в Solidity,
 	//	коим и является массив строк)
 	function assignDescription(uint256 _no, string memory _text) 
-	public 
+	public
+	still_on 
 	isCreator 
 	{
 		require(!options[_no].descripted, "Option is descripted already");

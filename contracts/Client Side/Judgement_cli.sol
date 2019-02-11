@@ -45,7 +45,7 @@ contract Judgement_cli {
 	mapping (address => Judge) judges;
 
 	//	Массив вариантов ответа
-	mapping (uint256 => Option) options;
+	mapping (uint256 => Option) public options;
 
 //ФУНКЦИОНАЛЬНАЯ ЧАСТЬ
 
@@ -58,7 +58,7 @@ contract Judgement_cli {
 
 	//	Модификатор функции, проверяющий, проходит ли опрос до сих пор
 	modifier still_on() {
-	    require(!FINISHED && now < endTime);
+	    require(!FINISHED && now < endTime, "Court round is over");
 	    _;
 	}
 	
@@ -141,7 +141,7 @@ contract Judgement_cli {
 	        WINNING_OPTION_ID = winner;
 	        WINNING_OPTION = options[WINNING_OPTION_ID].text;
 	    }
-	    if (options[winner].percent >= 95) {
+	    if (options[winner].percent < 95) {
 	    	emit Judgement_Finished(
 	    	    "No Consensus between the judges reached",
 	    	    FORECAST_ON_COURT,
@@ -158,21 +158,21 @@ contract Judgement_cli {
 	    );
         
         address[] storage guessed = options[WINNING_OPTION_ID].voters ;
-	    for (i = 0; i < guessed.length; i++) {
-			options[WINNING_OPTION_ID].voters[i].transfer(REWARD);
-		}
 	}
 	
 	//	Вспомогательная функция описания вариантов ответов (номер -> описание)
 	//	(Нужна ввиду отсутствия поддержки многомерных динамических массивов в Solidity,
 	//	коим и является массив строк)
-	function assignDescription(uint256 _no, string memory _text) 
+	function assignDescription() 
 	public 
 	isCreator 
 	{
-		require(!options[_no].descripted, "Option is descripted already");
-	    options[_no].text = _text;
-	    options[_no].descripted = true;
+		Forecast_cli fc = Forecast_cli(FORECAST_ON_COURT);
+		for (uint256 i = 0; i < fc.NUM_OPTIONS(); i++) {
+		    Option storage op = options[i];
+		    op.text = fc.getText(i);
+		    op.descripted = true;
+		}
 	}
 
 	//	Функция проверки адреса, используемая в модификаторе "not_contract()":

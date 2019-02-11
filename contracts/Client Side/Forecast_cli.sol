@@ -88,16 +88,13 @@ contract Forecast_cli {
 		uint256 _reward
 	) 
 	public
-	payable 
 	{
 	    require(!isContract(msg.sender));
-	    require(msg.value > 0, "Creator is to fullfill reward funds");
 	    beginTime = now;
 	    endTime = beginTime + duration;
 	    creator = msg.sender;
 	    TITLE = _title;
 	    MAX_REWARD = _reward;
-	    REWARD_FUNDS = msg.value;
 
 	    emit Forecast_Created(TITLE, creator, beginTime, duration);	
 	}
@@ -136,6 +133,7 @@ contract Forecast_cli {
 	}
 
 	function applyJudgement() public isCreator {
+		require(!JudgementApplied);
 		Judgement_cli judge = Judgement_cli(judgesAddress);
 		require(judge.FINISHED(), "Judgement cannot be applied until consensus reached or court ");
 		WINNING_OPTION_ID = judge.WINNING_OPTION_ID();
@@ -155,7 +153,7 @@ contract Forecast_cli {
 			options[WINNING_OPTION_ID].voters[i].transfer(REWARD);
 		}
 		// Остатки средств по контракту отправляются создателю контракта
-		creator.transfer(address(this).balance);
+	    endTime = now;
 		emit Payout(TITLE, REWARD, PARTICIPANTS);	
 		return true;
 	}
@@ -165,6 +163,7 @@ contract Forecast_cli {
 	//	коим и является массив строк)
 	function assignDescription(uint256 _no, string memory _text) 
 	public 
+	still_on
 	isCreator 
 	{
 		require(!options[_no].descripted, "Option is descripted already");
@@ -172,6 +171,10 @@ contract Forecast_cli {
 	    options[_no].descripted = true;
 	    NUM_OPTIONS += 1;
 	    emit Option_Assigned(TITLE, _no, _text);
+	}
+	
+	function getText(uint256 _no) public view returns(string) {
+	    return options[_no].text;
 	}
 
 	//	Функция проверки адреса, используемая в модификаторе "not_contract()":

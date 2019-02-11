@@ -159,6 +159,7 @@ contract Quiz_Time_Bounded_cli {
 	function assignDescription(uint256 _no, string memory _text) 
 	public 
 	isCreator 
+	still_on
 	{
 		require(!options[_no].descripted, "Option is descripted already");
 	    options[_no].text = _text;
